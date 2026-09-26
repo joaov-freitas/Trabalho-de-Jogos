@@ -1,5 +1,9 @@
+from bullet import PlayerBullet, EnemyBullet
+from enemy import Enemy
+
 def singleton(class_):
     instances = { }
+
     def getinstance(*args, **kwargs):
         if class_ not in instances:
             instances[class_] = class_(*args, **kwargs)	
@@ -8,16 +12,53 @@ def singleton(class_):
 
 @singleton
 class Collider ():
-    def lidar_colisao(self, o1, o2):
-        o1.lidar_colisao(o2)
+    def check_collisions(self,objects,player):
 
-    def lidar_pato(self, pato, outro):
-        outro.lidar_pato(pato)
+        player_bullets = [
+            obj for obj in objects
+            if isinstance(obj, PlayerBullet)
+        ]
 
-    def lidar_cursor(self, cursor, outro):
-        outro.lidar_cursor(cursor)
+        enemy_bullets = [
+            obj for obj in objects
+            if isinstance(obj, EnemyBullet)
+        ]
 
-    def colisao_pato_cursor (self, pato, cursor):
-        x = cursor.coord[0] + cursor.sprite.get_rect().center[0] - pato.sprite.get_rect().center[0]
-        y = cursor.coord[1] + cursor.sprite.get_rect().center[1] - pato.sprite.get_rect().center[1]
-        pato.coord = (x,y)
+        enemies = [
+            obj for obj in objects
+            if isinstance(obj, Enemy)
+        ]
+
+        # PlayerBullet x Enemy
+        for bullet in player_bullets:
+            if bullet.impacting:
+                continue # não colide se estiver impactando
+
+            for enemy in enemies:
+
+                if self.mask_collision(bullet, enemy):
+                    enemy.hit()
+                    bullet.hit()
+                    break
+
+        # EnemyBullet x Player
+        for bullet in enemy_bullets:
+
+            if self.mask_collision(bullet, player):
+                player.hit()
+                bullet.hit()
+                break
+
+    def mask_collision(self,obj1, obj2):
+        rect1 = obj1.get_rect()
+        rect2 = obj2.get_rect()
+
+        if not rect1.colliderect(rect2):
+            return False
+        
+        mask1 = obj1.get_mask()
+        mask2 = obj2.get_mask()
+
+        offset = (int(rect2.x - rect1.x), int(rect2.y - rect1.y))
+
+        return mask1.overlap(mask2, offset) is not None

@@ -1,93 +1,94 @@
 import pygame
-from abc import ABC, abstractmethod
+from game import Game
+from player import Player
+from bullet import PlayerBullet,EnemyBullet
+from util import EventHandler
+from enemy import Enemy
 from collision import Collider
 
-
-pygame.init()
-screen = pygame.display.set_mode((400, 400))
-clock = pygame.time.Clock()
-
 #inicialização
+pygame.init()
+WIDTH   =  800; HEIGHT =  600
+clock = pygame.time.Clock()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-class obj (ABC):
-    def __init__ (self, sprite, coord):
-        self.sprite = sprite
-        self.mask = pygame.mask.from_surface(sprite)
-        self.coord = coord
+game = Game()
 
-    def draw (self, screen):
-        screen.blit(self.sprite, self.coord) 
+# funções auxiliares
 
-    @abstractmethod
-    def lidar_colisao(self, obj):
-        pass
-
-    @abstractmethod
-    def lidar_pato(self, pato):
-        pass
-
-    @abstractmethod
-    def lidar_cursor(self, cursor):
-        pass
-
-class Pato(obj):
-
-    def __init__(self, sprite, coord):
-        super().__init__(sprite, coord)
-
-
-    def lidar_colisao(self, obj):
-        Collider().lidar_pato(self, obj)
-
-    def lidar_pato(self, pato):
-        pass # por enquanto patos não interagem
-    
-    def lidar_cursor(self, cursor):
-        Collider().colisao_pato_cursor(self, cursor)
-    
-class Cursor(obj):
-    def lidar_colisao(self,obj):
-        Collider().lidar_cursor(self, obj)
-
-    def lidar_pato(self, pato):
-        Collider().colisao_pato_cursor(pato, self)
-    
-    def lidar_cursor(self, cursor):
-        pass # cursores não colidem
-
-duck = Pato(pygame.image.load("base.png").convert_alpha(),
-           (100, 100))
-
-cursor = Cursor(pygame.transform.scale2x(pygame.image.load("cursor.png").convert_alpha()), (200, 200))
-
-objects = [duck, cursor]
-
-
-running = True
-
-while running:
-    ## input
+def handle_input(player):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.MOUSEMOTION:
-            cursor.coord = pygame.mouse.get_pos()
+            pygame.quit()
+            exit()
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                exit()
+            if event.key == pygame.K_SPACE and not game.is_game_over:
+                player.shoot()
 
-    ## atualização
-    if duck.mask.overlap(cursor.mask,
-                        (cursor.coord[0]- duck.coord[0],
-                         cursor.coord[1]- duck.coord[1])):
-        print("colidiu")
-        Collider().lidar_colisao(duck, cursor)
+def handle_movement(player):
+    direction = pygame.Vector2(0, 0)
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        direction.x -= 1
+    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        direction.x += 1
+    if keys[pygame.K_UP] or keys[pygame.K_w]:
+        direction.y -= 1
+    if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        direction.y += 1
+    player.set_direction(direction)
 
+def create_bullet(bullet_info):
+    owner = bullet_info["owner"]
+    pos = bullet_info["position"]
 
-    ## desenho
+    if isinstance(owner, Player):
+        bullet = PlayerBullet(pos)
+
+    elif isinstance(owner, Enemy):
+        bullet = EnemyBullet(pos)
+    else:
+        return
+
+    game.objects.append(bullet)
+
+def remove_obj(obj):
+    #variavel global é feio, mas serve como um exemplo
+    if obj in game.objects:
+        game.objects.remove(obj) 
+
+EventHandler().subscribe("Shoot", create_bullet)
+EventHandler().subscribe("DestroyObj", remove_obj)
+
+# loop principal
+
+running = True
+while running:
+    dt = clock.tick(60) / 1000.0
+
+    handle_input(game.player)
+
+    if not game.is_game_over or not game.win:
+        handle_movement(game.player)
+        game.update(dt)
+
+        for obj in game.objects.copy():
+            obj.update(dt)
+        
+        enemies = [
+            obj for obj in game.objects.copy()
+            if isinstance(obj, Enemy)
+        ]
+        if not enemies:
+            game.win = True
+        Collider().check_collisions(game.objects, game.player)
 
     screen.fill((30,30,30))
 
-    for o in objects:
-        o.draw(screen)
-
+    game.draw(screen)
+    
     pygame.display.flip()
-    clock.tick(150)
-    pass
+    
